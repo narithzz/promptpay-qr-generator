@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PromptPay QR Code Generator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-indigo-400 to-purple-500 min-h-screen p-5 font-sans">
+    <div class="container max-w-4xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div class="bg-gradient-to-r from-blue-400 to-cyan-300 text-white p-8 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold mb-2">🏦 PromptPay QR Generator</h1>
+            <p class="text-lg opacity-90">Generate QR codes for Thai PromptPay payments instantly</p>
+        </div>
+        <div class="grid md:grid-cols-2 min-h-[600px]">
+            <div class="p-8 bg-gray-50">
+                <form id="qrForm">
+                    <div class="mb-6">
+                        <label for="type" class="block font-semibold text-gray-700 mb-2">Payment Type <span class="text-red-600">*</span></label>
+                        <select id="type" name="type" required class="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400">
+                            <option value="">Select payment type</option>
+                            <option value="mobile">Mobile Number</option>
+                            <option value="national_id">National ID</option>
+                            <option value="ewallet">E-Wallet ID</option>
+                        </select>
+                    </div>
+                    <div class="mb-6">
+                        <label for="identifier" id="identifierLabel" class="block font-semibold text-gray-700 mb-2">Identifier <span class="text-red-600">*</span></label>
+                        <input type="text" id="identifier" name="identifier" required placeholder="Enter identifier" class="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400">
+                        <div class="text-sm text-gray-500 italic mt-1" id="identifierHelp">Please select a payment type first</div>
+                    </div>
+                    <div class="mb-6">
+                        <label for="amount" class="block font-semibold text-gray-700 mb-2">Amount (THB)</label>
+                        <input type="number" id="amount" name="amount" step="0.01" min="0" placeholder="0.00" class="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400">
+                        <div class="text-sm text-gray-500 italic mt-1">Leave blank for flexible amount</div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label for="merchantName" class="block font-semibold text-gray-700 mb-2">Merchant Name</label>
+                            <input type="text" id="merchantName" name="merchantName" placeholder="Optional" class="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400">
+                        </div>
+                        <div>
+                            <label for="merchantCity" class="block font-semibold text-gray-700 mb-2">Merchant City</label>
+                            <input type="text" id="merchantCity" name="merchantCity" placeholder="Optional" class="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-400">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full py-4 bg-gradient-to-r from-indigo-400 to-purple-500 text-white rounded-xl font-semibold text-lg shadow-md hover:shadow-xl hover:scale-[1.01] transition-all duration-200 mt-2 disabled:opacity-60" id="generateBtn">
+                        Generate QR Code
+                    </button>
+                </form>
+            </div>
+            <div class="p-8 flex flex-col items-center justify-center bg-white">
+                <div class="empty-state text-center" id="emptyState">
+                    <div class="text-5xl mb-4 opacity-30">📱</div>
+                    <h3 class="text-xl font-semibold mb-2 text-gray-700">Generate Your QR Code</h3>
+                    <p class="text-gray-500">Fill in the form to create a PromptPay QR code for easy payments</p>
+                </div>
+                <div class="loading text-center py-10" id="loading" style="display: none;">
+                    <div class="w-12 h-12 border-4 border-gray-200 border-t-blue-400 rounded-full animate-spin mx-auto mb-4"></div>
+                    <p class="text-gray-600">Generating QR Code...</p>
+                </div>
+                <div class="qr-container text-center py-5" id="qrContainer" style="display: none;">
+                    <div class="qr-code bg-white p-5 rounded-xl shadow-lg mb-5 inline-block">
+                        <img id="qrImage" src="" alt="PromptPay QR Code" class="max-w-full h-auto rounded-lg">
+                    </div>
+                    <div class="flex flex-wrap justify-center gap-2 mb-4">
+                        <button class="download-btn bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-semibold transition-all" id="downloadBtn">📥 Download PNG</button>
+                        <button class="copy-btn bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-2 rounded-lg font-semibold transition-all" id="copyBtn">📋 Copy Base64</button>
+                    </div>
+                    <div class="payment-info bg-gray-100 p-5 rounded-lg mt-4 w-full max-w-lg text-left" id="paymentInfo">
+                        <h3 class="text-lg font-bold text-gray-700 mb-3">Payment Information</h3>
+                        <div id="paymentDetails"></div>
+                    </div>
+                </div>
+                <div class="error bg-red-100 text-red-700 p-4 rounded-lg mt-4 border border-red-200 w-full max-w-lg text-center" id="errorMessage" style="display: none;"></div>
+                <div class="success bg-green-100 text-green-700 p-4 rounded-lg mt-4 border border-green-200 w-full max-w-lg text-center" id="successMessage" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const form = document.getElementById('qrForm');
+        const typeSelect = document.getElementById('type');
+        const identifierInput = document.getElementById('identifier');
+        const identifierLabel = document.getElementById('identifierLabel');
+        const identifierHelp = document.getElementById('identifierHelp');
+        const generateBtn = document.getElementById('generateBtn');
+        const emptyState = document.getElementById('emptyState');
+        const loading = document.getElementById('loading');
+        const qrContainer = document.getElementById('qrContainer');
+        const qrImage = document.getElementById('qrImage');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+        const paymentDetails = document.getElementById('paymentDetails');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const copyBtn = document.getElementById('copyBtn');
+
+        let currentQRData = null;
+
+        // Update form based on payment type
+        typeSelect.addEventListener('change', function() {
+            const type = this.value;
+            
+            switch(type) {
+                case 'mobile':
+                    identifierLabel.innerHTML = 'Mobile Number <span class="required">*</span>';
+                    identifierInput.placeholder = 'e.g., 0812345678 or +66812345678';
+                    identifierHelp.textContent = 'Enter Thai mobile number (with or without country code)';
+                    identifierInput.type = 'tel';
+                    break;
+                case 'national_id':
+                    identifierLabel.innerHTML = 'National ID <span class="required">*</span>';
+                    identifierInput.placeholder = 'e.g., 1234567890123';
+                    identifierHelp.textContent = 'Enter 13-digit Thai National ID (with or without dashes)';
+                    identifierInput.type = 'text';
+                    break;
+                case 'ewallet':
+                    identifierLabel.innerHTML = 'E-Wallet ID <span class="required">*</span>';
+                    identifierInput.placeholder = 'e.g., 1234567890';
+                    identifierHelp.textContent = 'Enter your e-wallet identifier';
+                    identifierInput.type = 'text';
+                    break;
+                default:
+                    identifierLabel.innerHTML = 'Identifier <span class="required">*</span>';
+                    identifierInput.placeholder = 'Enter identifier';
+                    identifierHelp.textContent = 'Please select a payment type first';
+                    identifierInput.type = 'text';
+            }
+            
+            identifierInput.value = '';
+        });
+
+        // Form submission
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            hideMessages();
+
+            // Client-side identifier validation
+            const type = typeSelect.value;
+            const identifier = identifierInput.value.trim();
+            let valid = true;
+            let errorMsg = '';
+            if (type === 'national_id') {
+                const digits = identifier.replace(/\D/g, '');
+                if (digits.length !== 13) {
+                    valid = false;
+                    errorMsg = 'National ID must be exactly 13 digits.';
+                }
+            } else if (type === 'ewallet') {
+                const digits = identifier.replace(/\D/g, '');
+                if (digits.length !== 15) {
+                    valid = false;
+                    errorMsg = 'E-Wallet ID must be exactly 15 digits.';
+                }
+            } else if (type === 'mobile') {
+                // Optionally, check for valid Thai mobile number format
+                const digits = identifier.replace(/\D/g, '');
+                if (digits.length < 9 || digits.length > 10) {
+                    valid = false;
+                    errorMsg = 'Mobile number should be 9 or 10 digits.';
+                }
+            } else {
+                valid = false;
+                errorMsg = 'Please select a payment type.';
+            }
+            if (!valid) {
+                showError(errorMsg);
+                hideLoading();
+                return;
+            }
+            showLoading();
+            
+            const formData = new FormData(form);
+            const requestData = {
+                type: formData.get('type'),
+                identifier: formData.get('identifier'),
+                amount: formData.get('amount') ? parseFloat(formData.get('amount')) : null,
+                merchantName: formData.get('merchantName') || null,
+                merchantCity: formData.get('merchantCity') || null
+            };
+
+            try {
+                const response = await fetch('/generate-qr', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentQRData = result.data;
+                    displayQRCode(result.data);
+                    showSuccess('QR Code generated successfully!');
+                } else {
+                    showError(result.error || 'Failed to generate QR code');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Network error. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // Download functionality
+        downloadBtn.addEventListener('click', function() {
+            if (currentQRData) {
+                const link = document.createElement('a');
+                link.download = `promptpay-qr-${Date.now()}.png`;
+                link.href = currentQRData.qrCodeDataURL;
+                link.click();
+            }
+        });
+
+        // Copy base64 functionality
+        copyBtn.addEventListener('click', async function() {
+            if (currentQRData) {
+                try {
+                    await navigator.clipboard.writeText(currentQRData.qrCodeBase64);
+                    showSuccess('Base64 data copied to clipboard!');
+                } catch (error) {
+                    // Fallback for older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = currentQRData.qrCodeBase64;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    showSuccess('Base64 data copied to clipboard!');
+                }
+            }
+        });
+
+        function showLoading() {
+            emptyState.style.display = 'none';
+            qrContainer.style.display = 'none';
+            loading.style.display = 'block';
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating...';
+        }
+
+        function hideLoading() {
+            loading.style.display = 'none';
+            generateBtn.disabled = false;
+            generateBtn.textContent = 'Generate QR Code';
+        }
+
+        function displayQRCode(data) {
+            qrImage.src = data.qrCodeDataURL;
+            
+            // Update payment info
+            const info = data.paymentInfo;
+            paymentDetails.innerHTML = `
+                <div class="info-item">
+                    <span class="label">Type:</span>
+                    <span class="value">${formatPaymentType(info.type)}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Identifier:</span>
+                    <span class="value">${info.identifier}</span>
+                </div>
+                ${info.amount ? `
+                <div class="info-item">
+                    <span class="label">Amount:</span>
+                    <span class="value">฿${info.amount.toFixed(2)}</span>
+                </div>
+                ` : ''}
+                ${info.merchantName ? `
+                <div class="info-item">
+                    <span class="label">Merchant:</span>
+                    <span class="value">${info.merchantName}</span>
+                </div>
+                ` : ''}
+                ${info.merchantCity ? `
+                <div class="info-item">
+                    <span class="label">City:</span>
+                    <span class="value">${info.merchantCity}</span>
+                </div>
+                ` : ''}
+                <div class="info-item">
+                    <span class="label">Payload:</span>
+                    <span class="value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">${data.payload}</span>
+                </div>
+            `;
+            
+            emptyState.style.display = 'none';
+            qrContainer.style.display = 'block';
+        }
+
+        function formatPaymentType(type) {
+            switch(type) {
+                case 'mobile': return 'Mobile Number';
+                case 'national_id': return 'National ID';
+                case 'ewallet': return 'E-Wallet';
+                default: return type;
+            }
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+            }, 5000);
+        }
+
+        function showSuccess(message) {
+            successMessage.textContent = message;
+            successMessage.style.display = 'block';
+            setTimeout(() => {
+                successMessage.style.display = 'none';
+            }, 3000);
+        }
+
+        function hideMessages() {
+            errorMessage.style.display = 'none';
+            successMessage.style.display = 'none';
+        }
+    </script>
+</body>
+</html>
